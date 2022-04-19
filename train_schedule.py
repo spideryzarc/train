@@ -3,27 +3,38 @@ import numpy as np
 
 # Train Schedule
 class TrainScheduleProblem:
-    _n = 0
-    _m = 0
-    _route_train = []
-    _cross_time_train = []
-    _start_time_train = []
-    _safety_time_train = []
+    _n: int = 0
+    "number of trains"
+    _m: int = 0
+    "number of stretches"
+    stretches = []
+    "stretches sequence for each train"
+    crossing_time = []
+    "crossing time of stretches sequence for each train"
+    start_time = []
+    "start time for each train"
+    safety_time = []
+    "minimum safety departure time distance for each train pair"
     _cross_time = {}
+    "_cross_time[(t,s)] = crossing time of train 't' on stretch 's'"
 
-    def __init__(self, filepath='instance_1.txt'):
+    def __init__(self, filepath: str = 'instance_1.txt'):
+        """
+
+        :param filepath: instance file path
+        """
         f = open(filepath, 'r')
         n = self._n = int(f.readline())
         self._m = int(f.readline())
-        self._start_time_train = [int(a) for a in f.readline().split()]
+        self.start_time = [int(a) for a in f.readline().split()]
         for i in range(n):
-            self._route_train.append([int(a) for a in f.readline().split()])
-            self._cross_time_train.append([int(a) for a in f.readline().split()])
-            self._safety_time_train.append([int(a) for a in f.readline().split()])
+            self.stretches.append([int(a) for a in f.readline().split()])
+            self.crossing_time.append([int(a) for a in f.readline().split()])
+            self.safety_time.append([int(a) for a in f.readline().split()])
 
         for i in range(n):
-            for j in range(len(self._route_train[i])):
-                self._cross_time[(i, self._route_train[i][j])] = self._cross_time_train[i][j]
+            for j in range(len(self.stretches[i])):
+                self._cross_time[(i, self.stretches[i][j])] = self.crossing_time[i][j]
         pass
 
     @property
@@ -34,44 +45,33 @@ class TrainScheduleProblem:
     def m(self):
         return self._m
 
-    def routes(self, train):
-        return self._route_train[train]
-
-    def start_time(self, train):
-        return self._start_time_train[train]
-
-    def cross_time(self, train, route):
+    def cross_time(self, train: int, route: int) -> int:
         return self._cross_time.setdefault((train, route), 0)
-
-    def safety_time(self, t_i, t_j):
-        return self._safety_time_train[t_i][t_j]
 
 
 class Schedule:
-    _departure_time_train = []
+    dep_time = []
 
     def __init__(self, ts: TrainScheduleProblem):
-        self._ts = ts
+        self.ts = ts
         for i in range(ts.n):
-            self._departure_time_train.append(np.zeros(len(ts.routes(i)), dtype=int))
-            self._departure_time_train[i][0] = ts.start_time(i)
-            for j in range(1, len(self._departure_time_train[i])):
-                self._departure_time_train[i][j] = self._departure_time_train[i][j - 1] + ts.cross_time(i,
-                                                                                                        ts.routes(i)[
-                                                                                                            j - 1])
+            self.dep_time.append(np.zeros(len(ts.stretches[i]), dtype=int))
+            self.dep_time[i][0] = ts.start_time[i]
+            for j in range(1, len(self.dep_time[i])):
+                self.dep_time[i][j] = self.dep_time[i][j - 1] + ts.cross_time(i, ts.stretches[i][j - 1])
 
     def check_collision(self):
-        ts = self._ts
+        ts = self.ts
         for i in range(1, ts.n):
-            r_i = ts.routes(i)
-            dep_i = self._departure_time_train[i]
+            r_i = ts.stretches[i]
+            dep_i = self.dep_time[i]
             for j in range(i):
-                r_j = ts.routes(j)
-                dep_j = self._departure_time_train[j]
+                r_j = ts.stretches[j]
+                dep_j = self.dep_time[j]
                 for a in range(len(r_i)):
                     for b in range(len(r_j)):
                         if r_i[a] == r_j[b]:
-                            if np.abs(dep_i[a] - dep_j[b]) < ts.safety_time(i, j):
+                            if np.abs(dep_i[a] - dep_j[b]) < ts.safety_time[i][j]:
                                 return False
                         elif r_i[a] == -r_j[b]:
                             if dep_i[a] < dep_j[b]:
@@ -82,11 +82,11 @@ class Schedule:
         return True
 
     def check_time_table(self):
-        ts = self._ts
+        ts = self.ts
         for t in range(ts.n):
-            dep = self._departure_time_train[t]
-            clock = ts.start_time(t)
-            for i, r in enumerate(ts.routes(t)):
+            dep = self.dep_time[t]
+            clock = ts.start_time[t]
+            for i, r in enumerate(ts.stretches[t]):
                 if clock < dep[i]:
                     return False
                 clock = dep[i] + ts.cross_time(t, r)
